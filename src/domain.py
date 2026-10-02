@@ -6,6 +6,12 @@ from typing import Any, Dict, Optional
 class DomainError(Exception):
     """Base error for domain failures."""
 
+    def __init__(self, message="", payload=None):
+        super().__init__(message)
+        # Optional structured context (e.g. the latest blockage list) that is
+        # surfaced to the caller alongside the error message.
+        self.payload = payload
+
 
 class ValidationError(DomainError):
     """Input does not satisfy a domain rule."""

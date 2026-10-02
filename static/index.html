@@ -3,32 +3,243 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>动物园谱系与繁育协调</title>
+  <title>动物园隔离与繁育协调</title>
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 2rem; color: #1f2937; }
-    main { max-width: 820px; margin: auto; }
-    pre { background: #f3f4f6; padding: 1rem; border-radius: 8px; overflow-x: auto; }
-    button { padding: .5rem .8rem; cursor: pointer; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 2rem; color: #1f2937; background: #f9fafb; }
+    main { max-width: 1080px; margin: auto; }
+    h1 { margin-bottom: .25rem; }
+    h2 { margin-top: 2rem; border-bottom: 1px solid #e5e7eb; padding-bottom: .3rem; }
+    .muted { color: #6b7280; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; }
+    .panel { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 1rem 1.25rem; }
+    label { display: block; font-size: .85rem; margin: .5rem 0 .15rem; color: #374151; }
+    input, select { width: 100%; padding: .45rem .55rem; border: 1px solid #d1d5db; border-radius: 6px; box-sizing: border-box; }
+    button { padding: .5rem .9rem; cursor: pointer; border: none; border-radius: 6px; background: #2563eb; color: #fff; margin-top: .7rem; }
+    button.secondary { background: #6b7280; }
+    button.danger { background: #b91c1c; }
+    button.small { padding: .25rem .55rem; font-size: .8rem; margin-top: 0; }
+    pre { background: #0f172a; color: #e2e8f0; padding: .9rem; border-radius: 8px; overflow-x: auto; font-size: .8rem; max-height: 320px; overflow-y: auto; }
+    .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: .8rem; }
+    .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: .75rem .9rem; font-size: .85rem; }
+    .card .id { font-family: ui-monospace, monospace; font-size: .75rem; color: #6b7280; word-break: break-all; }
+    .badge { display: inline-block; padding: .1rem .5rem; border-radius: 999px; font-size: .72rem; font-weight: 600; }
+    .b-active { background: #dcfce7; color: #166534; }
+    .b-blocked { background: #fef9c3; color: #854d0e; }
+    .b-released { background: #e0e7ff; color: #3730a3; }
+    .b-submitted { background: #e0f2fe; color: #075985; }
+    .b-releasing { background: #ffedd5; color: #9a3412; }
+    .b-invalidated { background: #fee2e2; color: #991b1b; }
+    .b-reconfirm_required { background: #fef3c7; color: #92400e; }
+    .b-approved { background: #dcfce7; color: #166534; }
+    .b-in_transit { background: #fef9c3; color: #854d0e; }
+    .b-completed { background: #e0e7ff; color: #3730a3; }
+    .b-quarantined { background: #fee2e2; color: #991b1b; }
+    .b-default { background: #f3f4f6; color: #374151; }
+    .blockers { margin-top: .4rem; padding-left: 1.1rem; color: #92400e; }
+    .reason { margin-top: .35rem; color: #991b1b; }
+    .row { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; }
+    .row > * { flex: 1; min-width: 120px; }
   </style>
 </head>
 <body>
 <main>
-  <h1>动物园谱系与繁育协调</h1>
-  <p>这是最小演示页面。使用浏览器或 curl 调用 JSON API。</p>
-  <p><button onclick="checkHealth()">检查服务状态</button></p>
+  <h1>动物园隔离与繁育协调</h1>
+  <p class="muted">兽医提交隔离单后：未完成配对立即失效、在途运输暂停隔离流程、运输不得回退；解除后配对需重新确认。同一原因只保留一张隔离单，并发操作先到先生效。</p>
+
+  <div class="grid">
+    <section class="panel">
+      <h3>1. 登记个体</h3>
+      <label>名称</label><input id="an-name" value="M-9">
+      <label>性别</label>
+      <select id="an-sex"><option value="male">male</option><option value="female">female</option></select>
+      <button onclick="createAnimal()">登记个体</button>
+    </section>
+
+    <section class="panel">
+      <h3>2. 配对建议</h3>
+      <label>提议人</label><input id="pa-by" value="coordinator">
+      <button class="secondary" onclick="createPairing()">创建配对</button>
+      <label>配对ID</label><select id="pa-id"></select>
+      <label>父本ID</label><select id="pa-sire"></select>
+      <label>母本ID</label><select id="pa-dam"></select>
+      <button onclick="approvePairing()">批准配对</button>
+    </section>
+
+    <section class="panel">
+      <h3>3. 运输安排</h3>
+      <label>个体</label><select id="tr-animal"></select>
+      <label>移出机构</label><input id="tr-from" value="Zoo-A">
+      <label>接收机构</label><input id="tr-to" value="Zoo-B">
+      <button class="secondary" onclick="createTransfer()">创建运输</button>
+      <label>运输单</label><select id="tr-id"></select>
+      <button class="secondary" onclick="authorizeTransfer()">许可 authorize</button>
+      <button class="secondary" onclick="shipTransfer()">发运 ship</button>
+      <button class="secondary" onclick="arriveTransfer()">到达 arrive</button>
+    </section>
+
+    <section class="panel">
+      <h3>4. 隔离单（兽医）</h3>
+      <label>个体</label><select id="q-animal"></select>
+      <label>隔离原因（同原因唯一）</label><input id="q-reason" value="fever-screening">
+      <label>隔离场所</label><input id="q-facility" value="Vet-Ward-2">
+      <button class="danger" onclick="submitQuarantine()">提交隔离单</button>
+      <label>隔离单操作</label><select id="q-id"></select>
+      <button class="secondary" onclick="releaseQuarantine()">解除隔离</button>
+      <button class="secondary" onclick="retryQuarantine()">重试未完成项</button>
+    </section>
+
+    <section class="panel">
+      <h3>5. 配对重新确认</h3>
+      <label>需重新确认的配对</label><select id="rc-id"></select>
+      <button onclick="reconfirmPairing()">重新确认 reconfirm</button>
+    </section>
+  </div>
+
+  <h2>隔离单</h2>
+  <div class="cards" id="quarantines"></div>
+
+  <h2>配对</h2>
+  <div class="cards" id="pairings"></div>
+
+  <h2>运输</h2>
+  <div class="cards" id="transfers"></div>
+
+  <h2>个体</h2>
+  <div class="cards" id="animals"></div>
+
+  <h2>最近响应 / 失效原因</h2>
   <pre id="result">等待操作</pre>
-  <h2>常用接口</h2>
-  <pre>GET  /health
-GET  /api/&lt;kind&gt;
-POST /api/&lt;kind&gt;
-GET  /api/entities/&lt;id&gt;
-POST /api/entities/&lt;id&gt;/actions</pre>
 </main>
 <script>
-async function checkHealth() {
-  const response = await fetch('/health');
-  document.getElementById('result').textContent = JSON.stringify(await response.json(), null, 2);
+const H = { 'X-User-Id': 'vet-1', 'X-Role': 'veterinarian', 'Content-Type': 'application/json' };
+
+function badge(status) {
+  const known = ['active','blocked','released','submitted','releasing','invalidated',
+    'reconfirm_required','approved','in_transit','completed','quarantined'];
+  const cls = known.includes(status) ? 'b-' + status : 'b-default';
+  return `<span class="badge ${cls}">${status}</span>`;
 }
+function esc(v) { return String(v == null ? '' : v).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+async function call(method, path, body) {
+  const res = await fetch(path, { method, headers: H, body: body ? JSON.stringify(body) : undefined });
+  const payload = await res.json().catch(() => ({}));
+  document.getElementById('result').textContent =
+    `${method} ${path} -> ${res.status}\n` + JSON.stringify(payload, null, 2);
+  if (!res.ok) throw payload;
+  return payload;
+}
+
+async function createAnimal() {
+  await call('POST', '/api/animals', { name: val('an-name'), sex: val('an-sex') });
+  refresh();
+}
+async function createPairing() {
+  await call('POST', '/api/pairings', { proposed_by: val('pa-by') });
+  refresh();
+}
+async function approvePairing() {
+  try {
+    await call('POST', `/api/entities/${val('pa-id')}/actions`, {
+      action: 'approve',
+      data: { sire_id: val('pa-sire'), dam_id: val('pa-dam'), approvals: ['vet-1'] },
+    });
+  } catch (e) {}
+  refresh();
+}
+async function createTransfer() {
+  await call('POST', '/api/transfers', {
+    animal_id: val('tr-animal'), from_institution: val('tr-from'), to_institution: val('tr-to'),
+  });
+  refresh();
+}
+async function authorizeTransfer() {
+  try { await call('POST', `/api/entities/${val('tr-id')}/actions`, { action: 'authorize', data: { permit_id: 'P-1' } }); } catch (e) {}
+  refresh();
+}
+async function shipTransfer() {
+  try { await call('POST', `/api/entities/${val('tr-id')}/actions`, { action: 'ship', data: { transport_id: 'T-1' } }); } catch (e) {}
+  refresh();
+}
+async function arriveTransfer() {
+  try { await call('POST', `/api/entities/${val('tr-id')}/actions`, { action: 'arrive', data: { arrival_date: '2026-10-02' } }); } catch (e) {}
+  refresh();
+}
+async function submitQuarantine() {
+  try {
+    await call('POST', '/api/quarantines', {
+      animal_id: val('q-animal'), reason: val('q-reason'), facility: val('q-facility'),
+    });
+  } catch (e) {}
+  refresh();
+}
+async function releaseQuarantine() {
+  try { await call('POST', `/api/entities/${val('q-id')}/actions`, { action: 'release', data: {} }); } catch (e) {}
+  refresh();
+}
+async function retryQuarantine() {
+  try { await call('POST', `/api/entities/${val('q-id')}/actions`, { action: 'retry', data: {} }); } catch (e) {}
+  refresh();
+}
+async function reconfirmPairing() {
+  try { await call('POST', `/api/entities/${val('rc-id')}/actions`, { action: 'reconfirm', data: { approvals: ['vet-1'] } }); } catch (e) {}
+  refresh();
+}
+
+function val(id) { return document.getElementById(id).value; }
+function fillSelect(id, items, label) {
+  const el = document.getElementById(id);
+  el.innerHTML = items.map(x => `<option value="${esc(x.id)}">${esc(label ? label(x) : x.id)}</option>`).join('');
+}
+
+function renderCard(e, extra) {
+  const d = e.data || {};
+  const lines = [];
+  if (d.name) lines.push(`名称: ${esc(d.name)}`);
+  if (d.animal_id) lines.push(`个体: ${esc(d.animal_id)}`);
+  if (d.reason) lines.push(`原因: ${esc(d.reason)}`);
+  if (d.facility) lines.push(`场所: ${esc(d.facility)}`);
+  if (d.sire_id) lines.push(`父/母: ${esc(d.sire_id)} / ${esc(d.dam_id)}`);
+  if (d.from_institution) lines.push(`${esc(d.from_institution)} → ${esc(d.to_institution)}`);
+  if (d.invalidation_reason) lines.push(`<div class="reason">失效原因: ${esc(d.invalidation_reason)}（隔离单 ${esc(d.invalidated_by_quarantine)}）</div>`);
+  if (Array.isArray(d.blockages) && d.blockages.length) {
+    lines.push('<ul class="blockers">' + d.blockages.map(b =>
+      `<li>${esc(b.type)} ${esc(b.target_id || '')} — ${esc(b.reason || '')}${b.last_error ? ' <em>(' + esc(b.last_error) + ')</em>' : ''}</li>`
+    ).join('') + '</ul>');
+  }
+  if (Array.isArray(d.affected) && d.affected.length) {
+    lines.push('<div class="muted">受影响: ' + d.affected.map(a => `${esc(a.type)}:${esc(a.id)}`).join(', ') + '</div>');
+  }
+  return `<div class="card"><div class="row" style="align-items:center"><strong>${esc(e.kind)}</strong> ${badge(e.status)}</div>
+    <div class="id">${esc(e.id)}</div><div>${lines.join('</div><div>')}</div>${extra || ''}</div>`;
+}
+
+async function refresh() {
+  const [animals, pairings, transfers, quarantines] = await Promise.all([
+    fetch('/api/animals').then(r => r.json()),
+    fetch('/api/pairings').then(r => r.json()),
+    fetch('/api/transfers').then(r => r.json()),
+    fetch('/api/quarantines').then(r => r.json()),
+  ]);
+  const A = animals.items || [], P = pairings.items || [], T = transfers.items || [], Q = quarantines.items || [];
+  fillSelect('q-animal', A, x => `${x.data.name} [${x.status}]`);
+  fillSelect('tr-animal', A, x => `${x.data.name} [${x.status}]`);
+  fillSelect('pa-sire', A, x => `${x.data.name} (${x.id.slice(0,8)})`);
+  fillSelect('pa-dam', A, x => `${x.data.name} (${x.id.slice(0,8)})`);
+  fillSelect('pa-id', P, x => `${x.id.slice(0,8)} [${x.status}]`);
+  fillSelect('tr-id', T, x => `${x.id.slice(0,8)} [${x.status}]`);
+  fillSelect('q-id', Q, x => `${x.id.slice(0,8)} [${x.status}] ${x.data.reason || ''}`);
+  fillSelect('rc-id', P.filter(p => p.status === 'reconfirm_required'), x => x.id.slice(0,8));
+  document.getElementById('animals').innerHTML = A.map(x => renderCard(x)).join('') || '<p class="muted">暂无</p>';
+  document.getElementById('pairings').innerHTML = P.map(x => renderCard(x)).join('') || '<p class="muted">暂无</p>';
+  document.getElementById('transfers').innerHTML = T.map(x => renderCard(x)).join('') || '<p class="muted">暂无</p>';
+  document.getElementById('quarantines').innerHTML = Q.map(x => renderCard(x,
+    `<div class="row" style="margin-top:.5rem">
+      <button class="small secondary" onclick="document.getElementById('q-id').value='${esc(x.id)}';releaseQuarantine()">解除</button>
+      <button class="small secondary" onclick="document.getElementById('q-id').value='${esc(x.id)}';retryQuarantine()">重试</button>
+    </div>`)).join('') || '<p class="muted">暂无</p>';
+}
+refresh();
 </script>
 </body>
 </html>

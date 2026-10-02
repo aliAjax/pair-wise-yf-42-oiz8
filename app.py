@@ -19,6 +19,11 @@ def main(argv=None):
     repository = SQLiteRepository(args.db)
     rules = RuleEngine()
     service = DomainService(repository, rules)
+    # Resume coordination interrupted by a previous shutdown: only unfinished
+    # items are processed, finished work is never redone.
+    resumed = service.recover_on_startup()
+    if resumed:
+        print("resumed quarantine coordination: %s" % resumed, flush=True)
     static_dir = Path(__file__).resolve().parent / "static"
     server = create_server(args.host, args.port, service, rules, str(static_dir))
 

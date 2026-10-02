@@ -71,7 +71,8 @@ def create_handler(service, rules, static_dir):
                 status = 400
             else:
                 status = 500
-            self._send(status, {"error": str(exc), "type": type(exc).__name__})
+            self._send(status, {"error": str(exc), "type": type(exc).__name__,
+                                **(getattr(exc, "payload", None) or {})})
 
         def do_GET(self):
             try:
@@ -85,6 +86,10 @@ def create_handler(service, rules, static_dir):
                         return self._send_html(200, handle.read())
                 if parts == ["api", "audit"]:
                     return self._send(200, {"items": service.audit_log()})
+                if parts == ["api", "recover"]:
+                    return self._send(
+                        200, {"resumed": service.recover_on_startup()}
+                    )
                 if len(parts) == 3 and parts[:2] == ["api", "entities"]:
                     return self._send(200, service.get(parts[2]))
                 if len(parts) >= 2 and parts[0] == "api":
