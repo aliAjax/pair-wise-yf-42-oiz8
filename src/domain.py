@@ -4,7 +4,15 @@ from typing import Any, Dict, Optional
 
 
 class DomainError(Exception):
-    """Base error for domain failures."""
+    """Base error for domain failures.
+
+    ``details`` carries machine-readable context (e.g. the current blocking
+    list) so callers can render the latest state without a second request.
+    """
+
+    def __init__(self, message, details=None):
+        super().__init__(message)
+        self.details = details or {}
 
 
 class ValidationError(DomainError):
@@ -21,6 +29,14 @@ class NotFoundError(DomainError):
 
 class ConflictError(DomainError):
     """A version or uniqueness constraint was violated."""
+
+
+class CoordinationConflict(ConflictError):
+    """A contended coordination step lost the optimistic race.
+
+    ``details`` holds the freshest state (including the current blocking
+    list) so the loser can see what changed without re-querying.
+    """
 
 
 class InvalidTransition(DomainError):

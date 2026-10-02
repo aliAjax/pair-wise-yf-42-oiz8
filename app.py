@@ -19,6 +19,10 @@ def main(argv=None):
     repository = SQLiteRepository(args.db)
     rules = RuleEngine()
     service = DomainService(repository, rules)
+    # 重启后接着处理未完成的隔离协调流程。
+    recovered = service.recover_paused()
+    if recovered:
+        print("recovered paused quarantines:", recovered, flush=True)
     static_dir = Path(__file__).resolve().parent / "static"
     server = create_server(args.host, args.port, service, rules, str(static_dir))
 

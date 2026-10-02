@@ -6,29 +6,132 @@
   <title>动物园谱系与繁育协调</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 2rem; color: #1f2937; }
-    main { max-width: 820px; margin: auto; }
-    pre { background: #f3f4f6; padding: 1rem; border-radius: 8px; overflow-x: auto; }
-    button { padding: .5rem .8rem; cursor: pointer; }
+    main { max-width: 960px; margin: auto; }
+    pre { background: #f3f4f6; padding: 1rem; border-radius: 8px; overflow-x: auto; white-space: pre-wrap; }
+    button { padding: .45rem .75rem; cursor: pointer; border: 1px solid #d1d5db; border-radius: 6px; background: #fff; }
+    button.primary { background: #2563eb; color: #fff; border-color: #2563eb; }
+    button.danger { background: #dc2626; color: #fff; border-color: #dc2626; }
+    input { padding: .45rem .6rem; border: 1px solid #d1d5db; border-radius: 6px; width: 12rem; }
+    .card { border: 1px solid #e5e7eb; border-radius: 8px; padding: 1rem; margin: .75rem 0; }
+    .row { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; margin: .4rem 0; }
+    .muted { color: #6b7280; font-size: .9rem; }
+    .err { color: #b91c1c; font-weight: 600; }
+    .ok { color: #047857; font-weight: 600; }
+    .pill { display: inline-block; padding: .1rem .5rem; border-radius: 999px; font-size: .8rem; background: #eef2ff; color: #3730a3; }
+    .pill.paused { background: #fef3c7; color: #92400e; }
+    .pill.active { background: #d1fae5; color: #065f46; }
+    .pill.released { background: #e5e7eb; color: #374151; }
   </style>
 </head>
 <body>
 <main>
   <h1>动物园谱系与繁育协调</h1>
-  <p>这是最小演示页面。使用浏览器或 curl 调用 JSON API。</p>
+  <p class="muted">隔离单、配对批准与个体运输已接成可恢复的协调流程。提交隔离后，受影响的未完成配对与在途运输会被列出，批准随即失效；在途运输不得回退，到达后隔离自动恢复；解除隔离后未完成配对重新确认。</p>
+
   <p><button onclick="checkHealth()">检查服务状态</button></p>
   <pre id="result">等待操作</pre>
+
+  <h2>隔离协调</h2>
+  <div class="card">
+    <h3>兽医登记隔离</h3>
+    <div class="row">
+      <label>个体 ID <input id="q-animal" placeholder="animal id"></label>
+      <label>原因 <input id="q-reason" placeholder="如 H5N1"></label>
+      <label>场所 <input id="q-location" placeholder="如 隔离区-A"></label>
+      <button class="primary" onclick="submitQuarantine()">提交隔离单</button>
+    </div>
+    <p class="muted">同一原因只留一张隔离单；重复提交返回已有单据。</p>
+  </div>
+
+  <div class="card">
+    <h3>隔离单列表</h3>
+    <div class="row">
+      <button onclick="loadQuarantines()">刷新列表</button>
+      <button onclick="recoverPaused()">恢复暂停的隔离单</button>
+    </div>
+    <div id="q-list" class="muted">尚未加载</div>
+  </div>
+
   <h2>常用接口</h2>
   <pre>GET  /health
-GET  /api/&lt;kind&gt;
-POST /api/&lt;kind&gt;
-GET  /api/entities/&lt;id&gt;
-POST /api/entities/&lt;id&gt;/actions</pre>
+GET  /api/quarantines
+POST /api/quarantines                {"animal_id","reason","location"}
+POST /api/quarantines/&lt;id&gt;/release
+POST /api/quarantines/&lt;id&gt;/resume
+POST /api/recover</pre>
 </main>
 <script>
-async function checkHealth() {
-  const response = await fetch('/health');
-  document.getElementById('result').textContent = JSON.stringify(await response.json(), null, 2);
+function show(value, ok) {
+  const el = document.getElementById('result');
+  el.textContent = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+  el.className = ok ? 'ok' : (value && value.error ? 'err' : '');
 }
+async function request(path, options) {
+  const response = await fetch(path, options);
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) { show(body, false); throw body; }
+  return body;
+}
+async function checkHealth() {
+  try { show(await request('/health'), true); } catch (e) {}
+}
+async function submitQuarantine() {
+  const animal = document.getElementById('q-animal').value.trim();
+  const reason = document.getElementById('q-reason').value.trim();
+  const location = document.getElementById('q-location').value.trim();
+  try {
+    const body = await request('/api/quarantines', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-User-Id': 'vet-1', 'X-Role': 'veterinarian' },
+      body: JSON.stringify({ animal_id: animal, reason, location })
+    });
+    show(body, true);
+    loadQuarantines();
+  } catch (e) {}
+}
+async function loadQuarantines() {
+  const list = document.getElementById('q-list');
+  try {
+    const body = await request('/api/quarantines');
+    const items = body.items || [];
+    if (!items.length) { list.innerHTML = '<span class="muted">暂无隔离单</span>'; return; }
+    list.innerHTML = items.map(q => {
+      const blockers = (q.data.blockers || []).map(b => b.kind + ':' + b.id + '(' + b.status + ')').join(', ') || '无';
+      return '<div class="card">' +
+        '<div><span class="pill ' + q.status + '">' + q.status + '</span> <b>' + q.data.reason + '</b> @ ' + q.data.location + '</div>' +
+        '<div class="muted">id: ' + q.id + ' · 个体: ' + q.data.animal_id + ' · 阻塞: ' + blockers + '</div>' +
+        '<div class="row">' +
+          '<button onclick="releaseQ(\'' + q.id + '\',' + q.version + ')">解除隔离</button>' +
+          '<button onclick="resumeQ(\'' + q.id + '\',' + q.version + ')">恢复</button>' +
+        '</div></div>';
+    }).join('');
+  } catch (e) { list.innerHTML = '<span class="err">加载失败</span>'; }
+}
+async function releaseQ(id, version) {
+  try {
+    const body = await request('/api/quarantines/' + id + '/release', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-User-Id': 'vet-1', 'X-Role': 'veterinarian' },
+      body: JSON.stringify({ expected_version: version })
+    });
+    show(body, true); loadQuarantines();
+  } catch (e) {}
+}
+async function resumeQ(id, version) {
+  try {
+    const body = await request('/api/quarantines/' + id + '/resume', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-User-Id': 'vet-1', 'X-Role': 'veterinarian' },
+      body: JSON.stringify({ expected_version: version })
+    });
+    show(body, true); loadQuarantines();
+  } catch (e) {}
+}
+async function recoverPaused() {
+  try { show(await request('/api/recover', { method: 'POST' }), true); loadQuarantines(); } catch (e) {}
+}
+checkHealth();
+loadQuarantines();
 </script>
 </body>
 </html>

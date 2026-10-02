@@ -71,7 +71,11 @@ def create_handler(service, rules, static_dir):
                 status = 400
             else:
                 status = 500
-            self._send(status, {"error": str(exc), "type": type(exc).__name__})
+            payload = {"error": str(exc), "type": type(exc).__name__}
+            details = getattr(exc, "details", None)
+            if details:
+                payload["details"] = details
+            self._send(status, payload)
 
         def do_GET(self):
             try:
@@ -138,6 +142,27 @@ def create_handler(service, rules, static_dir):
                         200,
                         service.transition(actor, parts[2], parts[3], self._body(), None),
                     )
+                if len(parts) == 2 and parts == ["api", "recover"]:
+                    return self._send(200, {"recovered": service.recover_paused()})
+                if len(parts) == 2 and parts == ["api", "quarantines"]:
+                    body = self._body()
+                    return self._send(
+                        201,
+                        service.submit_quarantine(
+                            actor,
+                            body.get("animal_id"),
+                            body.get("reason"),
+                            body.get("location"),
+                        ),
+                    )
+                if len(parts) == 4 and parts[:2] == ["api", "quarantines"] and parts[3] in ("release", "resume"):
+                    body = self._body()
+                    expected = body.pop("expected_version", None)
+                    if parts[3] == "release":
+                        result = service.release_quarantine(actor, parts[2], expected)
+                    else:
+                        result = service.resume_quarantine(actor, parts[2], expected)
+                    return self._send(200, result)
                 if len(parts) == 2 and parts[0] == "api":
                     body = self._body()
                     idem = self.headers.get("Idempotency-Key")
